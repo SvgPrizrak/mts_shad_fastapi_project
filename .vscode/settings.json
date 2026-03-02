@@ -1,0 +1,19 @@
+{
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}/src",
+  "python.testing.pytestEnabled": true,
+  "python.analysis.extraPaths": ["${workspaceFolder}/src"],
+  "python.defaultInterpreterPath": "/home/maxim/Projects/shad/2025/fastapi_project/.venv/bin/python"
+  // "pythonTestExplorer.testFramework": "pytest",
+  // "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  // "debug.allowBreakpointsEverywhere": true,
+  // "debugpy.debugJustMyCode": false,
+  // "pythonTestExplorer.testplanEnabled": true,
+  // "pythonTestExplorer.outputs.collectOutputs": true,
+  // "pythonTestExplorer.outputs.showOutputsOnRun": true,
+  // "testExplorer.useNativeTesting": false,
+  // "testExplorer.codeLens": true,
+  // "testExplorer.gutterDecoration": true,
+  // "terminal.integrated.fontLigatures.enabled": true
+}
