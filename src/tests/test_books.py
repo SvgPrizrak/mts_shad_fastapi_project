@@ -9,23 +9,9 @@ from src.models.sellers import Seller
 API_V1_BOOKS_URL_PREFIX = "/api/v1/books"
 
 
-# тестовый продавец для упрощения дублирования данных при добавлении ID продавца в книги
-@pytest.fixture
-async def test_seller(db_session):
-    seller = Seller(
-        first_name="Test",
-        last_name="Seller",
-        e_mail="test_seller@example.com",
-        password="test_password",
-    )
-    db_session.add(seller)
-    await db_session.flush()
-    return seller
-
-
-# тест на ручку, создающую книгу
+# тест на ручку, создающую книгу (требует авторизацию)
 @pytest.mark.asyncio()
-async def test_create_book(async_client, test_seller: Seller):
+async def test_create_book(auth_client, test_seller: Seller):
     data = {
         "title": "Clean Architecture",
         "author": "Robert Martin",
@@ -33,7 +19,7 @@ async def test_create_book(async_client, test_seller: Seller):
         "year": 2025,
         "seller_id": test_seller.id,
     }
-    response = await async_client.post(f"{API_V1_BOOKS_URL_PREFIX}/", json=data)
+    response = await auth_client.post(f"{API_V1_BOOKS_URL_PREFIX}/", json=data)
 
     assert response.status_code == status.HTTP_201_CREATED
 
@@ -51,9 +37,9 @@ async def test_create_book(async_client, test_seller: Seller):
     }
 
 
-# тест на ручку для валидации создания книги со слишком старым годом (не создает, не падает с ошибкой)
+# тест на ручку для валидации создания книги со слишком старым годом (требует авторизацию)
 @pytest.mark.asyncio()
-async def test_create_book_with_old_year(async_client, test_seller: Seller):
+async def test_create_book_with_old_year(auth_client, test_seller: Seller):
     data = {
         "title": "Clean Architecture",
         "author": "Robert Martin",
@@ -61,7 +47,7 @@ async def test_create_book_with_old_year(async_client, test_seller: Seller):
         "year": 1986,
         "seller_id": test_seller.id,
     }
-    response = await async_client.post(f"{API_V1_BOOKS_URL_PREFIX}/", json=data)
+    response = await auth_client.post(f"{API_V1_BOOKS_URL_PREFIX}/", json=data)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -90,11 +76,7 @@ async def test_get_books(db_session, async_client, test_seller: Seller):
     response = await async_client.get(f"{API_V1_BOOKS_URL_PREFIX}/")
 
     assert response.status_code == status.HTTP_200_OK
-
-    assert (
-        len(response.json()["books"]) == 2
-    )  # опасный паттерн! Если в БД есть данные, то тест упадет
-
+    assert len(response.json()["books"]) == 2
     # проверяем интерфейс ответа, на который у нас есть контракт
     assert response.json() == {
         "books": [
@@ -154,7 +136,7 @@ async def test_get_single_book(db_session, async_client, test_seller: Seller):
     }
 
 
-# тест на ручку для валидации получения книги с некорректным ID (не получает, не падает с ошибкой)
+# тест на ручку для валидации получения книги с некорректным ID
 @pytest.mark.asyncio()
 async def test_get_single_book_with_invalid_id(
     db_session, async_client, test_seller: Seller
@@ -175,9 +157,9 @@ async def test_get_single_book_with_invalid_id(
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-# тест на ручку, получающую полностью обновленную книгу (без ID)
+# тест на ручку, обновляющую книгу (требует авторизацию)
 @pytest.mark.asyncio()
-async def test_update_book(db_session, async_client, test_seller: Seller):
+async def test_update_book(db_session, auth_client, test_seller: Seller):
     book = Book(
         author="Pushkin",
         title="Eugeny Onegin",
@@ -197,7 +179,7 @@ async def test_update_book(db_session, async_client, test_seller: Seller):
         "seller_id": test_seller.id,
     }
 
-    response = await async_client.put(
+    response = await auth_client.put(
         f"{API_V1_BOOKS_URL_PREFIX}/{book.id}",
         json=data,
     )
@@ -214,7 +196,7 @@ async def test_update_book(db_session, async_client, test_seller: Seller):
     assert res.seller_id == test_seller.id
 
 
-# тест на ручку, получающую частично обновленную книгу (без ID)
+# тест на ручку, частично обновляющую книгу
 @pytest.mark.asyncio()
 async def test_partial_update_book(db_session, async_client, test_seller: Seller):
     book = Book(
@@ -265,7 +247,6 @@ async def test_delete_book(db_session, async_client, test_seller: Seller):
     response = await async_client.delete(f"{API_V1_BOOKS_URL_PREFIX}/{book.id}")
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
-
     await db_session.flush()
     all_books = await db_session.execute(select(Book))
     res = all_books.scalars().all()
@@ -273,7 +254,7 @@ async def test_delete_book(db_session, async_client, test_seller: Seller):
     assert len(res) == 0
 
 
-# тест на ручку для валидации удаления книги с некорректным ID (не удаляет, не падает с ошибкой)
+# тест на ручку для валидации удаления книги с некорректным ID
 @pytest.mark.asyncio()
 async def test_delete_book_with_invalid_book_id(
     db_session, async_client, test_seller: Seller

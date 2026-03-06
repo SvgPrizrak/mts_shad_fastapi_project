@@ -3,12 +3,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import BaseModel
 
-COUNTER = 0  # Каунтер, иметирующий присвоение id в базе данных
-
-# симулируем хранилище данных. Просто сохраняем объекты в память, в словаре.
-# {0: {"id": 1, "title": "blabla", ...., "year": 2023}}
-fake_storage = {}
-
 
 # ORM
 class Book(BaseModel):

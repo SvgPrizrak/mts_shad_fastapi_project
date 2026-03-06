@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.books import Book
+from src.models.sellers import Seller
 from src.schemas.books import IncomingBook, PatchBook, UpdatedBook
 
 
@@ -13,20 +14,24 @@ class BookService:
         self.session = session
 
     async def add_book(self, book: IncomingBook) -> Book:
-        # это - бизнес логика. Обрабатываем данные, сохраняем, преобразуем и т.д.
+        # проверяем существование продавца
+        query = select(Seller).where(Seller.id == book.seller_id)
+        result = await self.session.execute(query)
+        seller = result.scalar_one_or_none()
+
+        if not seller:
+            raise ValueError(f"Seller with id {book.seller_id} not found")
+
         new_book = Book(
-            **{
-                "seller_id": book.seller_id,
-                "title": book.title,
-                "author": book.author,
-                "year": book.year,
-                "pages": book.pages,
-            }
+            seller_id=book.seller_id,
+            title=book.title,
+            author=book.author,
+            year=book.year,
+            pages=book.pages,
         )
 
         self.session.add(new_book)
         await self.session.flush()
-
         return new_book
 
     async def delete_book(self, book_id: int) -> bool:

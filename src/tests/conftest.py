@@ -12,31 +12,33 @@ import pytest_asyncio
 from icecream import ic
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from src.configurations.auth import get_password_hash
 from src.configurations.settings import settings
 from src.models import books  # noqa
 from src.models.base import BaseModel
 from src.models.books import Book  # noqa F401
+from src.models.sellers import Seller
 
 # переопределяем движок для запуска тестов и подключаем его к тестовой базе
 # это решает проблему с сохранностью данных в основной базе приложения
 # фикстуры тестов их не зачистят
 # и обеспечивает чистую среду для запуска тестов - в ней не будет лишних записей
+
 async_test_engine = create_async_engine(
     settings.database_test_url,
     echo=True,
 )
 
-# Создаем фабрику сессий для тестового движка.
+# создаем фабрику сессий для тестового движка
 async_test_session = async_sessionmaker(
     async_test_engine, expire_on_commit=False, autoflush=False
 )
 
 
-# Получаем цикл событий для асинхорнного потока выполнения задач.
+# получаем цикл событий для асинхорнного потока выполнения задач
 @pytest_asyncio.fixture(scope="session")
 def event_loop() -> Generator:
     """Create an instance of the default event loop for each test case."""
-    # loop = asyncio.new_event_loop()  # На разных версиях питона и разных ОС срабатывает по разному
     loop = asyncio.get_event_loop()
     yield loop
     try:
@@ -45,7 +47,7 @@ def event_loop() -> Generator:
         ic(e)
 
 
-# Создаем таблицы в тестовой БД. Предварительно удаляя старые.
+# создаем таблицы в тестовой БД. Предварительно удаляя старые
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def create_tables() -> None:
     """Create tables in DB."""
@@ -54,7 +56,7 @@ async def create_tables() -> None:
         await connection.run_sync(BaseModel.metadata.create_all)
 
 
-# Создаем сессию для БД используемую для тестов
+# создаем сессию для БД используемую для тестов
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
     async with async_test_engine.connect() as connection:
@@ -63,7 +65,7 @@ async def db_session():
             await session.rollback()
 
 
-# Коллбэк для переопределения сессии в приложении
+# коллбэк для переопределения сессии в приложении
 @pytest.fixture(scope="function")
 def override_get_async_session(db_session):
     async def _override_get_async_session():
@@ -72,8 +74,7 @@ def override_get_async_session(db_session):
     return _override_get_async_session
 
 
-# Мы не можем создать 2 приложения (app) - это приведет к ошибкам.
-# Поэтому, на время запуска тестов мы подменяем там зависимость с сессией
+# мы не можем создать 2 приложения (app) - это приведет к ошибкам
 @pytest.fixture(scope="function")
 def test_app(override_get_async_session):
     from src.configurations.database import get_async_session
@@ -92,3 +93,36 @@ async def async_client(test_app):
         transport=transport, base_url="http://127.0.0.1:8000"
     ) as test_client:
         yield test_client
+
+
+# фикстура тестового продавца для удобства тестирования с учетом авторизации
+@pytest.fixture(scope="function")
+async def test_seller(db_session):
+    hashed_password = get_password_hash("test_password")
+
+    seller = Seller(
+        first_name="Test",
+        last_name="Seller",
+        e_mail="test_seller@example.com",
+        password=hashed_password,
+    )
+    db_session.add(seller)
+    await db_session.flush()
+    return seller
+
+
+# фикстура для получения токена
+@pytest_asyncio.fixture(scope="function")
+async def auth_token(async_client, test_seller):
+    login_data = {"email": test_seller.e_mail, "password": "test_password"}
+    response = await async_client.post("/api/v1/token/", json=login_data)
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return token
+
+
+# фикстура для клиента с автоматическим токеном
+@pytest_asyncio.fixture(scope="function")
+async def auth_client(async_client, auth_token):
+    async_client.headers.update({"Authorization": f"Bearer {auth_token}"})
+    return async_client

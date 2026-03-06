@@ -1,9 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.configurations.auth import get_current_user
 from src.configurations.database import get_async_session
+from src.models.sellers import Seller
 from src.schemas import (
     IncomingBook,
     PatchBook,
@@ -27,10 +30,22 @@ async def get_all_books(session: DBSession):
 @books_router.post(
     "/", response_model=ReturnedBook, status_code=status.HTTP_201_CREATED
 )
-async def create_book(book: IncomingBook, session: DBSession):
-    new_book = await BookService(session).add_book(book)
-
-    return new_book
+async def create_book(
+    book: IncomingBook,
+    session: DBSession,
+    current_user: Annotated[Seller, Depends(get_current_user)],
+):
+    try:
+        # проверяем, что seller_id из запроса авторизован
+        if book.seller_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot create book for this user!",
+            )
+        new_book = await BookService(session).add_book(book)
+        return new_book
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @books_router.get("/{book_id}", response_model=ReturnedBook)
@@ -53,14 +68,36 @@ async def delete_book(book_id: int, session: DBSession):
 
 
 @books_router.put("/{book_id}", response_model=ReturnedBook)
-async def update_book(book_id: int, new_book_data: UpdatedBook, session: DBSession):
+async def update_book(
+    book_id: int,
+    new_book_data: UpdatedBook,
+    session: DBSession,
+    current_user: Annotated[Seller, Depends(get_current_user)],
+):
+    try:
+        book_service = BookService(session)
+        existing_book = await book_service.get_single_book(book_id)
 
-    updated_book = await BookService(session).update_book(book_id, new_book_data)
+        if not existing_book:
+            return Response(status_code=status.HTTP_404_NOT_FOUND)
 
-    if not updated_book:
-        return Response(status_code=status.HTTP_404_NOT_FOUND)
+        if existing_book.seller_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to update this book",
+            )
 
-    return updated_book
+        updated_book = await book_service.update_book(book_id, new_book_data)
+        return updated_book
+
+    except IntegrityError:
+        # пишем, что seller_id не существует
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Seller with this id does not exist",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @books_router.patch("/{book_id}", response_model=ReturnedBook)
