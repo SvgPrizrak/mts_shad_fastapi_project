@@ -12,6 +12,6 @@ class Seller(BaseModel):
     first_name: Mapped[str] = mapped_column(String(255), nullable=False)
     last_name: Mapped[str] = mapped_column(String(255), nullable=False)
     e_mail: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    password: Mapped[str] = mapped_column(String(32), nullable=False)
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
 
     books = relationship("Book", back_populates="seller", cascade="all, delete-orphan")

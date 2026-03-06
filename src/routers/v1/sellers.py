@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.configurations.auth import get_current_user
 from src.configurations.database import get_async_session
+from src.models.sellers import Seller
 from src.schemas import (
     IncomingSeller,
     PatchSeller,
@@ -39,7 +41,17 @@ async def create_seller(seller: IncomingSeller, session: DBSession):
 
 
 @sellers_router.get("/{seller_id}", response_model=ReturnedSellerWithBooks)
-async def get_single_seller(seller_id: int, session: DBSession):
+async def get_single_seller(
+    seller_id: int,
+    session: DBSession,
+    current_user: Annotated[Seller, Depends(get_current_user)],
+):
+    # проверяем, что пользователь авторизован по токену
+    if current_user.id != seller_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Cannot access to this user!"
+        )
+
     seller = await SellerService(session).get_single_seller(seller_id)
 
     if seller is not None:

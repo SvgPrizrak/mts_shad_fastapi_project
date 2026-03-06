@@ -10,20 +10,6 @@ API_V1_BOOKS_URL_PREFIX = "/api/v1/books"
 API_V1_SELLERS_URL_PREFIX = "/api/v1/sellers"
 
 
-# тестовый продавец для упрощения дублирования данных при добавлении данных продавца
-@pytest.fixture
-async def test_seller(db_session):
-    seller = Seller(
-        first_name="Test",
-        last_name="Seller",
-        e_mail="test_seller@example.com",
-        password="test_password",
-    )
-    db_session.add(seller)
-    await db_session.flush()
-    return seller
-
-
 # тест на ручку, создающую продавца
 @pytest.mark.asyncio()
 async def test_create_seller(
@@ -91,10 +77,10 @@ async def test_create_seller_with_duplicate_email(
     assert response.status_code == 409
 
 
-# тест на ручку, получающую одного продавца
+# тест на ручку, получающую одного продавца (требует авторизацию)
 @pytest.mark.asyncio()
-async def test_get_seller(async_client, test_seller: Seller):
-    response = await async_client.get(f"{API_V1_SELLERS_URL_PREFIX}/{test_seller.id}")
+async def test_get_seller(auth_client, test_seller: Seller):
+    response = await auth_client.get(f"{API_V1_SELLERS_URL_PREFIX}/{test_seller.id}")
     assert response.status_code == status.HTTP_200_OK
     result = response.json()
     assert result == {
@@ -143,16 +129,16 @@ async def test_get_sellers(db_session, async_client, test_seller: Seller):
     }
 
 
-# тест на ручку для валидации получения продавца с некорректным ID (не получает, не падает с ошибкой)
+# тест на ручку для валидации получения продавца с некорректным ID (не получает, не падает с ошибкой, требует авторизацию)
 @pytest.mark.asyncio()
-async def test_get_seller_with_invalid_id(async_client):
-    response = await async_client.get(f"{API_V1_SELLERS_URL_PREFIX}/-1")
-    assert response.status_code == status.HTTP_404_NOT_FOUND
+async def test_get_seller_with_invalid_id(auth_client):
+    response = await auth_client.get(f"{API_V1_SELLERS_URL_PREFIX}/-1")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-# тест на ручку, получающую продавца со списком книг
+# тест на ручку, получающую продавца со списком книг (требует авторизацию)
 @pytest.mark.asyncio()
-async def test_get_seller_with_books(async_client, db_session, test_seller: Seller):
+async def test_get_seller_with_books(auth_client, db_session, test_seller: Seller):
     book = Book(
         author="Pushkin",
         title="Eugeny Onegin",
@@ -172,11 +158,11 @@ async def test_get_seller_with_books(async_client, db_session, test_seller: Sell
     db_session.add_all([book, book_2])
     await db_session.flush()
 
-    books_response = await async_client.get(f"{API_V1_BOOKS_URL_PREFIX}/")
+    books_response = await auth_client.get(f"{API_V1_BOOKS_URL_PREFIX}/")
     assert books_response.status_code == status.HTTP_200_OK
     books_result = books_response.json()
 
-    sellers_response = await async_client.get(
+    sellers_response = await auth_client.get(
         f"{API_V1_SELLERS_URL_PREFIX}/{test_seller.id}"
     )
     assert sellers_response.status_code == status.HTTP_200_OK

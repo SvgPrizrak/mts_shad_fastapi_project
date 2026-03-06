@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.configurations.auth import get_password_hash
 from src.models.sellers import Seller
 from src.schemas.sellers import IncomingSeller, PatchSeller, UpdatedSeller
 
@@ -15,13 +16,16 @@ class SellerService:
         self.session = session
 
     async def add_seller(self, seller: IncomingSeller) -> Seller:
+        # хэширование пароля перед сохранением
+        hashed_password = get_password_hash(seller.password)
+
         # это - бизнес логика. Обрабатываем данные, сохраняем, преобразуем и т.д.
         new_seller = Seller(
             **{
                 "first_name": seller.first_name,
                 "last_name": seller.last_name,
                 "e_mail": seller.e_mail,
-                "password": seller.password,
+                "password": hashed_password,
             }
         )
 
@@ -46,7 +50,7 @@ class SellerService:
     async def update_seller(
         self, seller_id: int, new_seller_data: UpdatedSeller
     ) -> Seller | None:
-        # Оператор "морж", позволяющий одновременно и присвоить значение и проверить его. Заменяет то, что закомментировано выше.
+        # оператор "морж", позволяющий одновременно и присвоить значение и проверить его. Заменяет то, что закомментировано выше.
         if updated_seller := await self.session.get(Seller, seller_id):
             updated_seller.first_name = new_seller_data.first_name
             updated_seller.last_name = new_seller_data.last_name
